@@ -209,7 +209,9 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
     asset[@"uri"] = videoDestinationURL.absoluteString;
     asset[@"type"] = [ImagePickerUtils getFileTypeFromUrl:videoDestinationURL];
     asset[@"fileSize"] = [ImagePickerUtils getFileSizeFromUrl:videoDestinationURL];
-
+    asset[@"fileName"] = fileName;
+    asset[@"name"] = fileName;
+    
     if (phAsset) {
       asset[@"id"] = phAsset.localIdentifier;
       // Add more extra data here ...
@@ -433,10 +435,30 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                 dispatch_group_leave(completionGroup);
             }];
         } else if ([provider hasItemConformingToTypeIdentifier:(NSString *)kUTTypeMovie]) {
-            [provider loadFileRepresentationForTypeIdentifier:(NSString *)kUTTypeMovie completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
-                [assets addObject:[self mapVideoToAsset:url phAsset:asset error:nil]];
-                dispatch_group_leave(completionGroup);
-            }];
+            if ([self.options[@"quickLoadMedia"] boolValue])
+            {
+                PHVideoRequestOptions *videoRequestOptions = [[PHVideoRequestOptions alloc] init];
+                videoRequestOptions.version = PHVideoRequestOptionsVersionCurrent;
+                videoRequestOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeAutomatic;
+                videoRequestOptions.networkAccessAllowed = YES;
+                
+                [[PHImageManager defaultManager] requestAVAssetForVideo:asset options:videoRequestOptions resultHandler:^(AVAsset *assetV, AVAudioMix *audioMix, NSDictionary *info) {
+                    AVURLAsset *avssetVideo = (AVURLAsset *)assetV;
+                    if (avssetVideo) {
+                            NSURL *originURL = [avssetVideo URL];
+                            // Now you have the URL of the original video.
+                        [assets addObject:[self mapVideoToAsset:originURL error:nil]];
+                        dispatch_group_leave(completionGroup);
+                    }
+                }];
+            }
+            else
+            {
+                [provider loadFileRepresentationForTypeIdentifier:(NSString *)kUTTypeMovie completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
+                    [assets addObject:[self mapVideoToAsset:url phAsset:asset error:nil]];
+                    dispatch_group_leave(completionGroup);
+                }];
+            }
         } else {
             // The provider didn't have an item matching photo or video (fails on M1 Mac Simulator)
             dispatch_group_leave(completionGroup);
